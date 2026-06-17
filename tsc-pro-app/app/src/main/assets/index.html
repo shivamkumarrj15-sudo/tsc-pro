@@ -661,109 +661,47 @@
         }
 
         function processText(text) {
-
             let results = [];
-
             let grandTotal = 0;
-
             let skipped = [];
-
-            let clean = text.replace(/[\[\(]+\s*(\d+)\s*[\]\)]+/g, '($1)');
-
-            clean = clean.replace(/[\.\,\*\#\-\+\@\_\&\!\/\?]+/g, ' '); 
-
-            clean = clean
-
-                .replace(/\[.*?\]/g, '')
-
-                .replace(/\(.*?\s*[ap]m\)/gi, '')
-
-                .replace(/Forwarded message/gi, '')
-
-                .replace(/[^\x00-\x7F]/g, "");
-
-            const categoryWords = Object.keys(CATEGORY_MAP).map(k => k.toLowerCase());
-
-            const allKeyWords = categoryWords.sort((a, b) => b.length - a.length).join('|');
-
-            const splitRegex = new RegExp(`(\\s*(?:${allKeyWords})\\s*)`, 'gi');
-
-            let segments = clean.split(splitRegex).filter(s => s && s.trim().length > 0);
-
-            let currentCategory = DEFAULT_CAT;
-
-            let primaryCategory = DEFAULT_CAT;
-
-            for (let i = 0; i < segments.length; i++) {
-
-                const segment = segments[i];
-
-                let normalizedSegment = segment.toLowerCase().trim();
-
-                const isCategory = categoryWords.includes(normalizedSegment);
-
-                if (isCategory) {
-
-                    currentCategory = normalizeCategory(segment);
-
-                    if (primaryCategory === DEFAULT_CAT) primaryCategory = currentCategory;
-
-                    continue;
-
-                }
-
-                let extraModifier = "";
-
-                const nextContentIndex = i + 1; 
-
+            
+            const rawRows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
+            let currentCategory = 'misc';
+            
+            for (const rawRow of rawRows) {
+                const parsed = extractDateAndContent(rawRow, new Date().toISOString().slice(0, 10));
+                const content = parsed.content;
                 
-
-                if (segments[i+1]) {
-
-                     let nextNormalized = segments[i+1].toLowerCase().trim();
-
-                     if (categoryWords.includes(nextNormalized)) {
-
-                          const afterCategoryIndex = i + 2;
-
-                          if (afterCategoryIndex < segments.length) {
-
-                               let potentialAb = segments[afterCategoryIndex];
-
-                               const modMatch = potentialAb.match(/^[\s]*(ab|abc)\b/i);
-
-                               if (modMatch) {
-
-                                    extraModifier = " " + modMatch[1].toLowerCase();
-
-                                    segments[afterCategoryIndex] = potentialAb.substring(modMatch[0].length);
-
-                               }
-
-                          }
-
-                     }
-
+                const entries = parseRowMessage(content, currentCategory);
+                if (entries.length > 0) {
+                    currentCategory = entries[entries.length - 1].category;
+                    
+                    for (const entry of entries) {
+                        const multiplier = entry.isDouble ? 2 : 1;
+                        const count = entry.numbers.length;
+                        const rate = entry.bracketValue;
+                        const total = count * rate * multiplier;
+                        
+                        results.push({
+                            nums: entry.numbers.join(', '),
+                            count: count,
+                            rate: rate,
+                            total: total,
+                            cat: entry.category.toUpperCase(),
+                            isDouble: entry.isDouble
+                        });
+                    }
+                } else {
+                    const cleanContent = content.toLowerCase();
+                    if (cleanContent && !cleanContent.includes('total') && !cleanContent.includes('balance') && !cleanContent.includes('credit') && !cleanContent.includes('debit')) {
+                        skipped.push(rawRow);
+                    }
                 }
-
-                if (segment && segment.trim()) {
-
-                    const temp = processSegment(segment + extraModifier, currentCategory);
-
-                    results.push(...temp.lines);
-
-                    skipped.push(...temp.skipped);
-
-                }
-
             }
-
+            
             results.forEach(r => grandTotal += r.total);
-
-            if (primaryCategory === DEFAULT_CAT && results.length > 0) primaryCategory = DEFAULT_CAT;
-
+            const primaryCategory = results.length > 0 ? results[0].cat : DEFAULT_CAT;
             return { lines: results, grand: grandTotal, skipped, primaryCategory };
-
         }
 
         // ==========================================
@@ -969,7 +907,8 @@
 
         function extractDateAndContent(line, defaultDate) {
             // Bracket format: e.g. [12/06, 20:55] Papa ji: ...
-            const bracketMatch = line.match(/^\[(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?[,\s]+([^\]]+)\]\s*(.*?):\s*(.*)$/);
+            // Note: Made opening bracket optional to support copies missing the first '['
+            const bracketMatch = line.match(/^\[?(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?[,\s]+([^\]]+)\]\s*(.*?):\s*(.*)$/);
             if (bracketMatch) {
                 const day = bracketMatch[1];
                 const month = bracketMatch[2];
@@ -1000,7 +939,14 @@
                 const day = simpleMatch[1];
                 const month = simpleMatch[2];
                 const year = simpleMatch[3] || new Date().getFullYear();
-                const content = line.replace(/^[^:]*:\s*/, '');
+                
+                let content = line;
+                const usernameColonMatch = line.match(/\]\s*[^:]+:\s*(.*)$/);
+                if (usernameColonMatch) {
+                    content = usernameColonMatch[1];
+                } else {
+                    content = line.replace(/^[^:]*:\s*/, '');
+                }
                 return { date: adjustDateByTime(year, month, day, null), content: content };
             }
             
@@ -1015,7 +961,7 @@
             return dateStr;
         }
 
-        function parseRowMessage(rawRow) {
+        function parseRowMessage(rawRow, inheritedCategory = null) {
             const entries = [];
             if (!rawRow.trim()) return entries;
             let processedRow = rawRow.trim();
@@ -1036,12 +982,21 @@
                 }
                 if (finalCategory) break;
             }
+            
+            // Inherit category if not found in this row
+            if (!finalCategory) {
+                finalCategory = inheritedCategory;
+            }
+            
             if (!finalCategory) return entries; 
             
             // Check if the row contains the ab/abc modifier
             const isDouble = /\b(ab|abc)\b/i.test(processedRow);
             
-            let numberBracketArea = processedRow.replace(new RegExp(categoryFoundAlias, 'gi'), ' ');
+            let numberBracketArea = processedRow;
+            if (categoryFoundAlias) {
+                numberBracketArea = processedRow.replace(new RegExp(categoryFoundAlias, 'gi'), ' ');
+            }
             numberBracketArea = numberBracketArea.replace(/[\[\{]/g, '(').replace(/[\}\]]/g, ')');
             numberBracketArea = numberBracketArea.replace(/["']/g, ' ').trim(); 
             const parts = numberBracketArea.split(/(\(\d+\))/).map(p => p.trim()).filter(p => p.length > 0);
@@ -1142,8 +1097,12 @@
             
             const findValues = findValuesByDate[dateKey] || {};
             
+            let currentCategory = null;
             for (const row of rows) {
-                const parsedEntries = parseRowMessage(row);
+                const parsedEntries = parseRowMessage(row, currentCategory);
+                if (parsedEntries.length > 0) {
+                    currentCategory = parsedEntries[parsedEntries.length - 1].category;
+                }
                 for (const entry of parsedEntries) {
                     const cat = entry.category;
                     const findStr = findValues[cat];
