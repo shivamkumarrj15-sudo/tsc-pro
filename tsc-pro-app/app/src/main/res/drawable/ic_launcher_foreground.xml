@@ -1,0 +1,65 @@
+<vector xmlns:android="http://schemas.github.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer Glowing Neon Circle -->
+    <path
+        android:strokeColor="#14b8a6"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M 54,20 A 34,34 0 1,1 53.9,20 Z" />
+
+    <!-- Inner Neon Circle Accent -->
+    <path
+        android:strokeColor="#2dd4bf"
+        android:strokeWidth="0.8"
+        android:fillColor="#00000000"
+        android:pathData="M 54,23 A 31,31 0 1,1 53.9,23 Z" />
+
+    <!-- Calculator Frame -->
+    <path
+        android:strokeColor="#ffffff"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M 39,36 L 69,36 A 4,4 0 0,1 73,40 L 73,69 A 4,4 0 0,1 69,73 L 39,73 A 4,4 0 0,1 35,69 L 35,40 A 4,4 0 0,1 39,36 Z" />
+
+    <!-- Calculator Screen -->
+    <path
+        android:fillColor="#14b8a6"
+        android:pathData="M 39,41 H 69 V 48 H 39 Z" />
+
+    <!-- Buttons: Row 1 -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 39,52 H 45 V 55 H 39 Z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 49,52 H 55 V 55 H 49 Z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 59,52 H 69 V 55 H 59 Z" />
+
+    <!-- Buttons: Row 2 -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 39,58 H 45 V 61 H 39 Z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 49,58 H 55 V 61 H 49 Z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 59,58 H 65 V 61 H 59 Z" />
+
+    <!-- Buttons: Row 3 -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M 39,64 H 45 V 67 H 39 Z" />
+    
+    <!-- Action/Equal Button (Neon Teal) -->
+    <path
+        android:fillColor="#14b8a6"
+        android:pathData="M 49,64 H 69 V 67 H 49 Z" />
+
+</vector>
