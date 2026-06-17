@@ -1038,6 +1038,9 @@
             }
             if (!finalCategory) return entries; 
             
+            // Check if the row contains the ab/abc modifier
+            const isDouble = /\b(ab|abc)\b/i.test(processedRow);
+            
             let numberBracketArea = processedRow.replace(new RegExp(categoryFoundAlias, 'gi'), ' ');
             numberBracketArea = numberBracketArea.replace(/[\[\{]/g, '(').replace(/[\}\]]/g, ')');
             numberBracketArea = numberBracketArea.replace(/["']/g, ' ').trim(); 
@@ -1085,7 +1088,8 @@
                         entries.push({
                             numbers: uniqueNumbers, 
                             bracketValue: bracketValue,
-                            category: finalCategory 
+                            category: finalCategory,
+                            isDouble: isDouble
                         });
                     }
                 }
@@ -1144,6 +1148,8 @@
                     const cat = entry.category;
                     const findStr = findValues[cat];
                     const bracket = entry.bracketValue;
+                    const isDouble = entry.isDouble;
+                    const multiplier = isDouble ? 2 : 1;
                     
                     let jodiCount = 0;
                     let akharCount = 0;
@@ -1153,8 +1159,15 @@
                     for (const num of entry.numbers) {
                         if (num.length === 2) {
                             jodiCount++;
-                            if (findStr && num === findStr) {
-                                winningJodiCount++;
+                            if (findStr) {
+                                if (num === findStr) {
+                                    winningJodiCount++;
+                                } else if (isDouble) {
+                                    const reversedNum = num[1] + num[0];
+                                    if (reversedNum === findStr) {
+                                        winningJodiCount++;
+                                    }
+                                }
                             }
                         } else if (num.length === 3 && TRIPLE_NUMBERS.includes(num)) {
                             akharCount++;
@@ -1168,9 +1181,9 @@
                         }
                     }
                     
-                    results[cat].dSale += jodiCount * bracket;
-                    results[cat].aSale += akharCount * bracket;
-                    results[cat].tSale += (jodiCount + akharCount) * bracket;
+                    results[cat].dSale += jodiCount * bracket * multiplier;
+                    results[cat].aSale += akharCount * bracket * multiplier;
+                    results[cat].tSale += (jodiCount + akharCount) * bracket * multiplier;
                     results[cat].oDara += winningJodiCount * bracket;
                     results[cat].oAkhar += winningAkharCount * bracket;
                 }
