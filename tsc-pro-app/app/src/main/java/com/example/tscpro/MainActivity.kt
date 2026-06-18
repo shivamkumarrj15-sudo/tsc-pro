@@ -1,7 +1,9 @@
 package com.example.tscpro
 
+import android.net.Uri
 import android.os.Bundle
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -26,7 +28,33 @@ class MainActivity : ComponentActivity() {
         }
         webView.clearCache(true)
 
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val url = request.url.toString()
+                if (url.startsWith("https://tscpro.payment/status") || url.contains("tscpro.payment/status")) {
+                    val uri = request.url
+                    val status = uri.getQueryParameter("code") ?: "PAYMENT_SUCCESS"
+                    val txnId = uri.getQueryParameter("transactionId") ?: ""
+                    webView.evaluateJavascript("javascript:handlePaymentRedirect('$status', '$txnId')", null)
+                    webView.loadUrl("file:///android_asset/index.html")
+                    return true
+                }
+                return false
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                if (url.startsWith("https://tscpro.payment/status") || url.contains("tscpro.payment/status")) {
+                    val uri = Uri.parse(url)
+                    val status = uri.getQueryParameter("code") ?: "PAYMENT_SUCCESS"
+                    val txnId = uri.getQueryParameter("transactionId") ?: ""
+                    webView.evaluateJavascript("javascript:handlePaymentRedirect('$status', '$txnId')", null)
+                    webView.loadUrl("file:///android_asset/index.html")
+                    return true
+                }
+                return false
+            }
+        }
         webView.webChromeClient = WebChromeClient()
 
         // Register the JS interface
@@ -46,5 +74,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
+    }
+
+    fun loadPaymentUrl(url: String) {
+        webView.loadUrl(url)
     }
 }

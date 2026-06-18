@@ -13,9 +13,15 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStreamReader
 import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
 
 class AndroidBridge(private val context: Context) {
 
@@ -162,5 +168,98 @@ class AndroidBridge(private val context: Context) {
         } else {
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
+    }
+
+    @JavascriptInterface
+    fun initiatePhonePePayment(amountInPaise: Long, customerMobile: String) {
+        val activity = context as? Activity ?: return
+        Thread {
+            try {
+                val txnId = "TXN_" + System.currentTimeMillis()
+                val payload = JSONObject().apply {
+                    put("merchantId", "PGTESTPAYUAT86")
+                    put("merchantTransactionId", txnId)
+                    put("merchantUserId", "USER_" + System.currentTimeMillis())
+                    put("amount", amountInPaise)
+                    put("redirectUrl", "https://tscpro.payment/status")
+                    put("redirectMode", "REDIRECT")
+                    put("callbackUrl", "https://tscpro.payment/callback")
+                    put("mobileNumber", customerMobile)
+                    put("paymentInstrument", JSONObject().apply {
+                        put("type", "PAY_PAGE")
+                    })
+                }
+
+                val base64Payload = Base64.encodeToString(payload.toString().toByteArray(), Base64.NO_WRAP)
+                val saltKey = "96434309-7796-489d-8924-ab56988a6076"
+                val saltIndex = "1"
+                val signatureStr = base64Payload + "/pg/v1/pay" + saltKey
+                
+                val bytes = MessageDigest.getInstance("SHA-256").digest(signatureStr.toByteArray())
+                val checksumHex = bytes.joinToString("") { "%02x".format(it) }
+                val checksum = checksumHex + "###" + saltIndex
+
+                val requestObj = JSONObject().apply {
+                    put("request", base64Payload)
+                }
+
+                val url = URL("https://api-preprod.phonepe.com/apis/pg-sandbox/pg/v1/pay")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("X-VERIFY", checksum)
+                conn.doOutput = true
+
+                conn.outputStream.use { os ->
+                    os.write(requestObj.toString().toByteArray())
+                    os.flush()
+                }
+
+                val responseCode = conn.responseCode
+                if (responseCode == 200) {
+                    val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                    val response = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        response.append(line)
+                    }
+                    reader.close()
+
+                    val resObj = JSONObject(response.toString())
+                    val code = resObj.optString("code")
+                    if (code == "SUCCESS") {
+                        val dataObj = resObj.optJSONObject("data")
+                        val instrumentResponse = dataObj?.optJSONObject("instrumentResponse")
+                        val redirectInfo = instrumentResponse?.optJSONObject("redirectInfo")
+                        val redirectUrl = redirectInfo?.optString("url")
+
+                        if (!redirectUrl.isNullOrEmpty()) {
+                            activity.runOnUiThread {
+                                if (activity is MainActivity) {
+                                    activity.loadPaymentUrl(redirectUrl)
+                                }
+                            }
+                        } else {
+                            showToast("Error: No redirect URL returned")
+                        }
+                    } else {
+                        val msg = resObj.optString("message", "Initiation failed")
+                        showToast("Failed: $msg")
+                    }
+                } else {
+                    val reader = BufferedReader(InputStreamReader(conn.errorStream ?: conn.inputStream))
+                    val response = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        response.append(line)
+                    }
+                    reader.close()
+                    showToast("Server Error: $responseCode - $response")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                showToast("Network Error: ${e.message}")
+            }
+        }.start()
     }
 }
