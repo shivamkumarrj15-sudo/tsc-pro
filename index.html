@@ -220,10 +220,20 @@
     <form id="pinForm" class="space-y-4">
      <input type="password" id="pinInput" class="w-full text-center text-2xl tracking-widest bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-lg py-3 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors text-slate-800 dark:text-white" maxlength="6" placeholder="****" autofocus>
      <p id="pinError" class="text-red-500 text-sm hidden">Incorrect PIN</p>
-     <button type="submit" class="w-full bg-neon-500 hover:bg-neon-400 text-white dark:text-slate-900 font-bold py-3 rounded-lg transition-all shadow-md">Unlock</button>
-    </form>
+      <button type="submit" class="w-full bg-neon-500 hover:bg-neon-400 text-white dark:text-slate-900 font-bold py-3 rounded-lg transition-all shadow-md">Unlock</button>
+     </form>
+     <!-- Public Compliance Footer for Razorpay Onboarding -->
+     <div class="mt-6 flex flex-wrap justify-center gap-3 text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider">
+       <button type="button" onclick="openPolicyModal('privacy')" class="hover:text-neon-500 transition-colors">Privacy Policy</button>
+       <span>•</span>
+       <button type="button" onclick="openPolicyModal('terms')" class="hover:text-neon-500 transition-colors">Terms</button>
+       <span>•</span>
+       <button type="button" onclick="openPolicyModal('refund')" class="hover:text-neon-500 transition-colors">Refunds</button>
+       <span>•</span>
+       <button type="button" onclick="openPolicyModal('contact')" class="hover:text-neon-500 transition-colors">Contact</button>
+     </div>
+    </div>
    </div>
-  </div>
   <!-- ==================== SECURITY: EXPIRATION SCREEN ==================== -->
   <div id="expirationScreen" class="fixed inset-0 z-[70] hidden-screen flex items-center justify-center bg-slate-50 dark:bg-[#020617] transition-colors duration-500">
    <div class="glass-panel p-10 rounded-2xl max-w-md w-full text-center border border-red-500/30">
@@ -300,6 +310,20 @@
         <button id="btnPremiumPay" onclick="buyPremium()" class="w-full bg-amber-500 hover:bg-amber-400 text-white dark:text-slate-900 font-bold py-2.5 rounded-lg transition-all shadow-md flex items-center justify-center gap-2">
           <i class="fa-solid fa-credit-card"></i> Pay via PhonePe (₹499)
         </button>
+      </div>
+    </div>
+  </div>
+  <!-- ==================== DIALOG: PUBLIC COMPLIANCE POLICY MODAL ==================== -->
+  <div id="policyModal" class="fixed inset-0 z-[90] hidden-screen flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
+    <div class="glass-panel p-6 rounded-2xl max-w-lg w-full border border-neon-500/20 dark:border-neon-400/20 mx-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4 border-b border-black/5 dark:border-white/5 pb-2">
+        <h3 id="policyModalTitle" class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+          <!-- Dynamically populated -->
+        </h3>
+        <button onclick="closePolicyModal()" class="text-slate-450 hover:text-slate-650 dark:hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="policyModalContent" class="text-xs text-slate-600 dark:text-gray-350 space-y-3 leading-relaxed">
+        <!-- Dynamically populated -->
       </div>
     </div>
   </div>
@@ -2424,6 +2448,74 @@
                 }
                 if (payButton) payButton.innerText = "Pay via PhonePe (₹499)";
             }
+        };
+        
+        // --- COMPLIANCE POLICIES MODAL HANDLERS ---
+        window.openPolicyModal = function(type) {
+            const modal = document.getElementById('policyModal');
+            const titleEl = document.getElementById('policyModalTitle');
+            const contentEl = document.getElementById('policyModalContent');
+            if (!modal || !titleEl || !contentEl) return;
+            
+            let title = "";
+            let content = "";
+            
+            if (type === 'privacy') {
+                title = '<i class="fa-solid fa-user-shield text-neon-500"></i> Privacy Policy';
+                content = `
+                    <p class="font-bold">Privacy Policy for TSC Pro</p>
+                    <p>At TSC Pro, we value your privacy and are committed to protecting your personal data. This privacy policy explains how we handle data when you use our web utility and Android application.</p>
+                    <p class="font-semibold mt-2">1. Information Collection</p>
+                    <p>We do not collect any personal data or payment credentials directly. All calculation history is stored locally in your browser's local storage unless you explicitly connect to your own Firestore database.</p>
+                    <p class="font-semibold mt-2">2. Payment Security</p>
+                    <p>All subscription payments are securely processed directly by our authorized payment gateway, Razorpay. We do not store or process your credit card, netbanking, or UPI details on our servers.</p>
+                    <p class="font-semibold mt-2">3. Updates</p>
+                    <p>We may update this policy periodically. Your continued use of the service constitutes acceptance of any changes.</p>
+                `;
+            } else if (type === 'terms') {
+                title = '<i class="fa-solid fa-file-contract text-neon-500"></i> Terms & Conditions';
+                content = `
+                    <p class="font-bold">Terms & Conditions of Use</p>
+                    <p>Welcome to TSC Pro. By accessing our services, you agree to comply with and be bound by the following terms.</p>
+                    <p class="font-semibold mt-2">1. Usage License</p>
+                    <p>This software is a utility tool for analyzing and parsing report calculations. You agree to use this application only for lawful personal or commercial purposes.</p>
+                    <p class="font-semibold mt-2">2. Subscriptions & Delivery</p>
+                    <p>Access to premium features requires a monthly subscription fee of ₹499. Subscriptions will remain active for 30 days from the date of successful payment. Digital access to premium features is unlocked instantly upon successful payment verification.</p>
+                    <p class="font-semibold mt-2">3. Liability</p>
+                    <p>We provide this software "as is" without any warranties. We are not responsible for any calculation mistakes or data loss arising from its use.</p>
+                `;
+            } else if (type === 'refund') {
+                title = '<i class="fa-solid fa-hand-holding-dollar text-neon-500"></i> Cancellation & Refund Policy';
+                content = `
+                    <p class="font-bold">Cancellation & Refund Policy</p>
+                    <p>Please read our cancellation and refund guidelines carefully before purchasing a subscription.</p>
+                    <p class="font-semibold mt-2">1. Non-Refundable</p>
+                    <p>Subscriptions purchased on TSC Pro are non-refundable. Once a payment is successfully completed, we cannot issue a refund under any circumstances, as digital premium assets are unlocked instantly.</p>
+                    <p class="font-semibold mt-2">2. Cancellation</p>
+                    <p>You can cancel your subscription at any time. Upon cancellation, your premium access will continue to remain active until the end of your current 30-day billing cycle, and no further automatic renewals will take place.</p>
+                `;
+            } else if (type === 'contact') {
+                title = '<i class="fa-solid fa-address-book text-neon-500"></i> Contact Us';
+                content = `
+                    <p class="font-bold">Contact Customer Support</p>
+                    <p>If you have any questions, concerns, or queries regarding subscriptions and premium payments, feel free to reach out to us:</p>
+                    <div class="mt-2 space-y-1.5 font-mono text-left">
+                        <p><strong>Merchant Legal Name:</strong> MANISH KUMAR</p>
+                        <p><strong>Support Email:</strong> tscpro.support@gmail.com</p>
+                        <p><strong>Contact Number:</strong> +91 9876543210</p>
+                        <p><strong>Business Address:</strong> Ward No. 5, Near Old Bus Stand, Fatehabad, Haryana - 125050</p>
+                    </div>
+                `;
+            }
+            
+            titleEl.innerHTML = title;
+            contentEl.innerHTML = content;
+            modal.classList.remove('hidden-screen');
+        };
+        
+        window.closePolicyModal = function() {
+            const modal = document.getElementById('policyModal');
+            if (modal) modal.classList.add('hidden-screen');
         };
         
         // Initial run
