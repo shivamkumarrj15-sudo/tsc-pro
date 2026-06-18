@@ -22,7 +22,9 @@ class MainActivity : ComponentActivity() {
             allowFileAccess = true
             useWideViewPort = true
             loadWithOverviewMode = true
+            cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
         }
+        webView.clearCache(true)
 
         webView.webViewClient = WebViewClient()
         webView.webChromeClient = WebChromeClient()
