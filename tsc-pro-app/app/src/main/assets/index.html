@@ -672,7 +672,7 @@
                 const parsed = extractDateAndContent(rawRow, new Date().toISOString().slice(0, 10));
                 const content = parsed.content;
                 
-                const entries = parseRowMessage(content, currentCategory);
+                const entries = parseRowMessage(content, currentCategory, parsed.time);
                 if (entries.length > 0) {
                     currentCategory = entries[entries.length - 1].category;
                     
@@ -905,6 +905,40 @@
             return `${finalY}-${finalM}-${finalD}`;
         }
 
+        function getCategoryByTime(timeStr) {
+            if (!timeStr) return null;
+            const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*([aApP][mM])?/);
+            if (!timeMatch) return null;
+            
+            let hours = parseInt(timeMatch[1], 10);
+            const minutes = parseInt(timeMatch[2], 10);
+            const ampm = timeMatch[3];
+            if (ampm) {
+                if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+                if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+            }
+            
+            const totalMinutes = hours * 60 + minutes;
+            
+            // FB: 06:00 AM to 05:59 PM (360 to 1079 minutes)
+            // NFB: 06:00 PM to 06:44 PM (1080 to 1124 minutes)
+            // GB: 06:45 PM to 09:19 PM (1125 to 1279 minutes)
+            // ND: 09:20 PM to 11:19 PM (1280 to 1399 minutes)
+            // PD: 11:20 PM to 05:59 AM (1400 to 1439, and 0 to 359 minutes)
+            
+            if (totalMinutes >= 360 && totalMinutes < 1080) {
+                return 'fb';
+            } else if (totalMinutes >= 1080 && totalMinutes < 1125) {
+                return 'nfb';
+            } else if (totalMinutes >= 1125 && totalMinutes < 1280) {
+                return 'gb';
+            } else if (totalMinutes >= 1280 && totalMinutes < 1400) {
+                return 'nd';
+            } else {
+                return 'pd';
+            }
+        }
+
         function extractDateAndContent(line, defaultDate) {
             // Bracket format: e.g. [12/06, 20:55] Papa ji: ...
             // Note: Made opening bracket optional to support copies missing the first '['
@@ -919,7 +953,7 @@
                 const timeMatch = timeRaw.match(/(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/);
                 const timeStr = timeMatch ? timeMatch[1] : null;
                 
-                return { date: adjustDateByTime(year, month, day, timeStr), content: content };
+                return { date: adjustDateByTime(year, month, day, timeStr), content: content, time: timeStr };
             }
             
             // Plain format: e.g. 12/06/2026, 20:55 - Papa ji: ...
@@ -930,7 +964,7 @@
                 const year = plainMatch[3] || new Date().getFullYear();
                 const timeStr = plainMatch[4];
                 const content = plainMatch[5];
-                return { date: adjustDateByTime(year, month, day, timeStr), content: content };
+                return { date: adjustDateByTime(year, month, day, timeStr), content: content, time: timeStr };
             }
             
             // Fallback match for lines that just start with a date
@@ -947,10 +981,14 @@
                 } else {
                     content = line.replace(/^[^:]*:\s*/, '');
                 }
-                return { date: adjustDateByTime(year, month, day, null), content: content };
+                
+                const timeInLineMatch = line.match(/\b(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)\b/);
+                const timeStr = timeInLineMatch ? timeInLineMatch[1] : null;
+                
+                return { date: adjustDateByTime(year, month, day, timeStr), content: content, time: timeStr };
             }
             
-            return { date: defaultDate, content: line };
+            return { date: defaultDate, content: line, time: null };
         }
 
         function formatDateDisplay(dateStr) {
@@ -961,31 +999,70 @@
             return dateStr;
         }
 
-        function parseRowMessage(rawRow, inheritedCategory = null) {
+        function parseRowMessage(rawRow, inheritedCategory = null, time = null) {
             const entries = [];
             if (!rawRow.trim()) return entries;
-            let processedRow = rawRow.trim();
-            const whatsappMetaRegex = /^\[[^\]]+\]\s*[^:]+:\s*/;
-            processedRow = processedRow.replace(whatsappMetaRegex, '').trim();
-            if (!processedRow) return entries; 
             
-            let finalCategory = null;
-            let categoryFoundAlias = '';
-            let categorySearchable = processedRow.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
-            for (const key in CATEGORIES_MAP) {
-                for (const alias of CATEGORIES_MAP[key]) {
-                    if (categorySearchable.includes(alias.replace(/\./g, ''))) {
-                        finalCategory = key;
-                        categoryFoundAlias = alias;
-                        break;
-                    }
+            let processedRow = rawRow.trim();
+            let resolvedTime = time;
+            
+            // If this is a raw WhatsApp line, extract content and time directly
+            const bracketMatch = processedRow.match(/^\[?(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?[,\s]+([^\]]+)\]\s*(.*?):\s*(.*)$/);
+            const plainMatch = processedRow.match(/^(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?[,\s]+([^\s-]+(?:\s*[aApP][mM])?)\s*-\s*[^:]+:\s*(.*)$/);
+            
+            if (bracketMatch) {
+                const timeRaw = bracketMatch[4];
+                const timeMatch = timeRaw.match(/(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/);
+                if (timeMatch && !resolvedTime) {
+                    resolvedTime = timeMatch[1];
                 }
-                if (finalCategory) break;
+                processedRow = bracketMatch[6];
+            } else if (plainMatch) {
+                if (!resolvedTime) {
+                    resolvedTime = plainMatch[4];
+                }
+                processedRow = plainMatch[5];
+            } else {
+                const whatsappMetaRegex = /^\[[^\]]+\]\s*[^:]+:\s*/;
+                processedRow = processedRow.replace(whatsappMetaRegex, '').trim();
             }
             
-            // Inherit category if not found in this row
+            if (!processedRow) return entries;
+            
+            // Determine category based on time window
+            let finalCategory = getCategoryByTime(resolvedTime);
+            let categoryFoundAlias = '';
+            
+            // If time is not present or not mapped, fallback to written category alias or inherited
             if (!finalCategory) {
-                finalCategory = inheritedCategory;
+                let categorySearchable = processedRow.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
+                for (const key in CATEGORIES_MAP) {
+                    for (const alias of CATEGORIES_MAP[key]) {
+                        if (categorySearchable.includes(alias.replace(/\./g, ''))) {
+                            finalCategory = key;
+                            categoryFoundAlias = alias;
+                            break;
+                        }
+                    }
+                    if (finalCategory) break;
+                }
+                
+                // Inherit category if not found in this row
+                if (!finalCategory) {
+                    finalCategory = inheritedCategory;
+                }
+            } else {
+                // If category is determined by time, still search if there is a category alias in text to remove it
+                let categorySearchable = processedRow.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
+                for (const key in CATEGORIES_MAP) {
+                    for (const alias of CATEGORIES_MAP[key]) {
+                        if (categorySearchable.includes(alias.replace(/\./g, ''))) {
+                            categoryFoundAlias = alias;
+                            break;
+                        }
+                    }
+                    if (categoryFoundAlias) break;
+                }
             }
             
             if (!finalCategory) return entries; 
@@ -1064,7 +1141,7 @@
                 const parsed = extractDateAndContent(rawRow, currentActiveDate);
                 currentActiveDate = parsed.date;
                 
-                const entries = parseRowMessage(rawRow);
+                const entries = parseRowMessage(parsed.content, null, parsed.time);
                 if (!parsedFinds[currentActiveDate]) {
                     parsedFinds[currentActiveDate] = { fb: '', nfb: '', gb: '', nd: '', pd: '' };
                 }
@@ -1098,8 +1175,11 @@
             const findValues = findValuesByDate[dateKey] || {};
             
             let currentCategory = null;
-            for (const row of rows) {
-                const parsedEntries = parseRowMessage(row, currentCategory);
+            for (const rowObj of rows) {
+                const content = typeof rowObj === 'string' ? rowObj : rowObj.content;
+                const time = typeof rowObj === 'string' ? null : rowObj.time;
+                
+                const parsedEntries = parseRowMessage(content, currentCategory, time);
                 if (parsedEntries.length > 0) {
                     currentCategory = parsedEntries[parsedEntries.length - 1].category;
                 }
@@ -1219,15 +1299,15 @@
                         
                         exportTableRowsHtml += `
                             <tr style="background-color: #ffffff !important; color: #000000 !important; font-family: monospace; font-size: 10px;">
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center;">${idx + 1}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 6px; text-align: center; font-family: sans-serif; font-weight: bold;">${catLabel}${winningNum}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif;">90/10-9/10</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold;">${res.tSale}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center;">${res.oDara}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center;">${res.oAkhar}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: #dc2626 !important; font-weight: bold;">${res.debit}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold;">${res.credit}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: ${netVal >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold;">${netVal}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 40px;">${idx + 1}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 6px; text-align: center; font-family: sans-serif; font-weight: bold; width: 140px;">${catLabel}${winningNum}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif; width: 90px;">90/10-9/10</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold; width: 90px;">${res.tSale}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oDara}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oAkhar}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: #dc2626 !important; font-weight: bold; width: 100px;">${res.debit}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold; width: 100px;">${res.credit}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: ${netVal >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold; width: 110px;">${netVal}</td>
                             </tr>
                         `;
                         
@@ -1260,13 +1340,13 @@
                     
                     exportTableRowsHtml += `
                         <tr style="background-color: #f1f5f9 !important; color: #000000 !important; font-family: monospace; font-size: 10px; font-weight: bold;">
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-family: sans-serif;" colspan="3">TOTAL</td>
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold;">${totalTSale}</td>
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center;">${totalODara}</td>
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center;">${totalOAkhar}</td>
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: #dc2626 !important; font-weight: bold;">${totalDebit}</td>
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold;">${totalComm}</td>
-                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: ${totalNetBalance >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold;">${totalNetBalance}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-family: sans-serif; width: 270px;" colspan="3">TOTAL</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold; width: 90px;">${totalTSale}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; width: 90px;">${totalODara}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; width: 90px;">${totalOAkhar}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: #dc2626 !important; font-weight: bold; width: 100px;">${totalDebit}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold; width: 100px;">${totalComm}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: ${totalNetBalance >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold; width: 110px;">${totalNetBalance}</td>
                         </tr>
                     `;
                 }
@@ -1452,15 +1532,15 @@
                     
                     exportTableRowsHtml += `
                             <tr style="background-color: #ffffff !important; color: #000000 !important; font-family: monospace; font-size: 10px;">
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center;">${idx + 1}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 6px; text-align: center; font-family: sans-serif; font-weight: bold;">${catLabel}${winningNum}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif;">90/10-9/10</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold;">${res.tSale}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center;">${res.oDara}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center;">${res.oAkhar}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: #dc2626 !important; font-weight: bold;">${res.debit}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold;">${res.credit}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: ${netVal >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold;">${netVal}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 40px;">${idx + 1}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 6px; text-align: center; font-family: sans-serif; font-weight: bold; width: 140px;">${catLabel}${winningNum}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif; width: 90px;">90/10-9/10</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold; width: 90px;">${res.tSale}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oDara}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oAkhar}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: #dc2626 !important; font-weight: bold; width: 100px;">${res.debit}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold; width: 100px;">${res.credit}</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; color: ${netVal >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold; width: 110px;">${netVal}</td>
                             </tr>
                         `;
                     
@@ -1493,13 +1573,13 @@
                 
                 exportTableRowsHtml += `
                     <tr style="background-color: #f1f5f9 !important; color: #000000 !important; font-family: monospace; font-size: 10px; font-weight: bold;">
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-family: sans-serif;" colspan="3">TOTAL</td>
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold;">${totalTSale}</td>
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center;">${totalODara}</td>
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center;">${totalOAkhar}</td>
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: #dc2626 !important; font-weight: bold;">${totalDebit}</td>
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold;">${totalComm}</td>
-                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: ${totalNetBalance >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold;">${totalNetBalance}</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-family: sans-serif; width: 270px;" colspan="3">TOTAL</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold; width: 90px;">${totalTSale}</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; width: 90px;">${totalODara}</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; width: 90px;">${totalOAkhar}</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: #dc2626 !important; font-weight: bold; width: 100px;">${totalDebit}</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold; width: 100px;">${totalComm}</td>
+                        <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: ${totalNetBalance >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold; width: 110px;">${totalNetBalance}</td>
                     </tr>
                 `;
             }
@@ -1548,7 +1628,7 @@
                 if (!grouped[currentActiveDate]) {
                     grouped[currentActiveDate] = [];
                 }
-                grouped[currentActiveDate].push(parsed.content);
+                grouped[currentActiveDate].push({ content: parsed.content, time: parsed.time });
             }
             
             currentGroupedRows = grouped;
@@ -1919,7 +1999,7 @@
                 if (!groupedLines[currentActiveDate]) {
                     groupedLines[currentActiveDate] = [];
                 }
-                groupedLines[currentActiveDate].push(parsed.content);
+                groupedLines[currentActiveDate].push(rawRow);
             }
             
             currentGroupedResults = {};
