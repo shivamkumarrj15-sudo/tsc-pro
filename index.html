@@ -1734,7 +1734,7 @@
                 
                 const dataUrl = canvas.toDataURL('image/png');
                 if (window.AndroidBridge) {
-                    window.AndroidBridge.shareImage(dataUrl, `TSC_Report_${dateKey}.png`);
+                    window.AndroidBridge.shareImage(dataUrl, `TSC_Report_${dateKey}_${Date.now()}.png`);
                 } else {
                     canvas.toBlob(blob => {
                         const file = new File([blob], `TSC_Report_${dateKey}.png`, { type: 'image/png' });
@@ -1790,7 +1790,7 @@
                 return;
             }
             
-            const filePromises = dates.map(dateKey => {
+            const filePromises = dates.map((dateKey, index) => {
                 return new Promise((resolve) => {
                     const card = document.getElementById(`card-${dateKey}`);
                     if (!card) return resolve(null);
@@ -1825,7 +1825,7 @@
                         if (window.AndroidBridge) {
                             resolve({
                                 dataUrl: canvas.toDataURL('image/png'),
-                                filename: `TSC_Report_${dateKey}.png`
+                                filename: `TSC_Report_${dateKey}_${Date.now()}_${index}.png`
                             });
                         } else {
                             canvas.toBlob(blob => {
