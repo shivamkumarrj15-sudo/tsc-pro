@@ -2051,6 +2051,9 @@
 
                 document.getElementById('mainApp').classList.remove('hidden-screen');
 
+                // Check premium status to lock the app if the user is not premium
+                checkPremiumStatus();
+
                 // Run passing engine init once main app is shown
 
                 handleInputChange();
@@ -2456,7 +2459,8 @@
                     "ondismiss": function() {
                         console.log('Payment modal closed');
                     }
-                }
+                },
+                "webview_intent": true
             };
             
             try {

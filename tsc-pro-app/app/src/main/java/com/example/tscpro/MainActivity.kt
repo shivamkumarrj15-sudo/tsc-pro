@@ -1,5 +1,6 @@
 package com.example.tscpro
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.WebChromeClient
@@ -25,6 +26,9 @@ class MainActivity : ComponentActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
             cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            }
         }
         webView.clearCache(true)
 
@@ -39,6 +43,19 @@ class MainActivity : ComponentActivity() {
                     webView.loadUrl("file:///android_asset/index.html")
                     return true
                 }
+                
+                // Handle UPI payment deep links natively
+                if (url.startsWith("upi:") || url.startsWith("phonepe:") || url.startsWith("paytm:") || url.startsWith("gpay:") || url.contains("tez.google.com")) {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        view.context.startActivity(intent)
+                        return true
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        return true
+                    }
+                }
                 return false
             }
 
@@ -51,6 +68,19 @@ class MainActivity : ComponentActivity() {
                     webView.evaluateJavascript("javascript:handlePaymentRedirect('$status', '$txnId')", null)
                     webView.loadUrl("file:///android_asset/index.html")
                     return true
+                }
+                
+                // Handle UPI payment deep links natively
+                if (url.startsWith("upi:") || url.startsWith("phonepe:") || url.startsWith("paytm:") || url.startsWith("gpay:") || url.contains("tez.google.com")) {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        view.context.startActivity(intent)
+                        return true
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        return true
+                    }
                 }
                 return false
             }
