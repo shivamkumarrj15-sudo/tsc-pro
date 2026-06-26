@@ -762,7 +762,9 @@
             let currentCategory = 'misc';
             
             for (const rawRow of rawRows) {
-                const parsed = extractDateAndContent(rawRow, new Date().toISOString().slice(0, 10));
+                const now = new Date();
+                const defaultDateStr = `2026-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const parsed = extractDateAndContent(rawRow, defaultDateStr);
                 const content = parsed.content;
                 
                 const entries = parseRowMessage(content, currentCategory, parsed.time);
@@ -1040,7 +1042,7 @@
             if (bracketMatch) {
                 const day = bracketMatch[1];
                 const month = bracketMatch[2];
-                const year = bracketMatch[3] || new Date().getFullYear();
+                const year = bracketMatch[3] || 2026;
                 const timeRaw = bracketMatch[4];
                 const content = bracketMatch[6];
                 
@@ -1055,7 +1057,7 @@
             if (plainMatch) {
                 const day = plainMatch[1];
                 const month = plainMatch[2];
-                const year = plainMatch[3] || new Date().getFullYear();
+                const year = plainMatch[3] || 2026;
                 const timeStr = plainMatch[4];
                 const content = plainMatch[5];
                 return { date: adjustDateByTime(year, month, day, timeStr), content: content, time: timeStr };
@@ -1066,7 +1068,7 @@
             if (simpleMatch) {
                 const day = simpleMatch[1];
                 const month = simpleMatch[2];
-                const year = simpleMatch[3] || new Date().getFullYear();
+                const year = simpleMatch[3] || 2026;
                 
                 let content = line;
                 const usernameColonMatch = line.match(/\]\s*[^:]+:\s*(.*)$/);
@@ -1694,7 +1696,10 @@
             const findMessages = findMessagesInput.value;
             
             const defaultDateInput = document.getElementById('dateInput');
-            const defaultDate = defaultDateInput ? defaultDateInput.value : new Date().toISOString().slice(0,10);
+            const defaultDate = defaultDateInput && defaultDateInput.value ? defaultDateInput.value : (() => {
+                const now = new Date();
+                return `2026-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            })();
             
             // 1. Parse raw winning numbers first to populate findValuesByDate
             const parsedFinds = parseFindMessagesText(findMessages, defaultDate);
@@ -2023,7 +2028,14 @@
                 console.log("Firebase Error", e);
             }
 
-            document.getElementById('dateInput').valueAsDate = new Date();
+            const now = new Date();
+            const dateInput = document.getElementById('dateInput');
+            if (dateInput) {
+                const y = 2026;
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                dateInput.value = `${y}-${m}-${d}`;
+            }
             updatePartyDropdown();
 
         })();
@@ -2084,7 +2096,10 @@
             if(!text.trim()) return;
             
             const defaultDateInput = document.getElementById('dateInput');
-            const defaultDate = defaultDateInput ? defaultDateInput.value : new Date().toISOString().slice(0,10);
+            const defaultDate = defaultDateInput && defaultDateInput.value ? defaultDateInput.value : (() => {
+                const now = new Date();
+                return `2026-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            })();
             
             const groupedLines = {};
             const rawRows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
