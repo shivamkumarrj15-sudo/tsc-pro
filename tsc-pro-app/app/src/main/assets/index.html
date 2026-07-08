@@ -436,12 +436,23 @@
      
      <!-- User ID Selector -->
      <div class="glass-panel p-4 rounded-xl flex flex-wrap items-center justify-between gap-4 border border-black/5 dark:border-white/10 bg-slate-50 dark:bg-slate-900/20">
-      <div class="flex items-center gap-2">
-       <label class="text-sm font-bold text-slate-700 dark:text-gray-300">यूज़र आईडी (User ID):</label>
-       <select id="partySelect" onchange="handlePartyChange()" class="glass-input px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        <!-- Dynamically populated -->
-       </select>
-      </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-2">
+         <label class="text-sm font-bold text-slate-700 dark:text-gray-300">यूज़र आईडी (User ID):</label>
+         <select id="partySelect" onchange="handlePartyChange()" class="glass-input px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <!-- Dynamically populated -->
+         </select>
+        </div>
+        <div class="flex items-center gap-2">
+         <label class="text-sm font-bold text-slate-700 dark:text-gray-300">कमीशन दर (Rate Split):</label>
+         <select id="partyRateSelect" onchange="handlePartyRateChange()" class="glass-input px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="90/10">90/10</option>
+          <option value="85/15">85/15</option>
+          <option value="80/20">80/20</option>
+          <option value="93/7">93/7</option>
+         </select>
+        </div>
+       </div>
       <button onclick="openCreateUserModal()" class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-md">
        <i class="fa-solid fa-plus"></i> नया यूज़र आईडी बनाएं (Create User ID)
       </button>
@@ -761,13 +772,15 @@
             const rawRows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
             let currentCategory = 'misc';
             
-            for (const rawRow of rawRows) {
+            for (let idx = 0; idx < rawRows.length; idx++) {
+                const rawRow = rawRows[idx];
                 const now = new Date();
                 const defaultDateStr = `2026-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                 const parsed = extractDateAndContent(rawRow, defaultDateStr);
                 const content = parsed.content;
                 
-                const entries = parseRowMessage(content, currentCategory, parsed.time);
+                const remaining = rawRows.slice(idx + 1);
+                const entries = parseRowMessage(content, currentCategory, parsed.time, remaining);
                 if (entries.length > 0) {
                     currentCategory = entries[entries.length - 1].category;
                     
@@ -835,6 +848,12 @@
             const optionsHtml = parties.map(p => `<option value="${p}" ${p === active ? 'selected' : ''}>${p}</option>`).join('');
             if (select1) select1.innerHTML = optionsHtml;
             if (select2) select2.innerHTML = optionsHtml;
+            
+            const rateSelect = document.getElementById('partyRateSelect');
+            if (rateSelect) {
+                const currentRate = localStorage.getItem('tsc_rate_' + active) || '90/10';
+                rateSelect.value = currentRate;
+            }
         }
 
         function handlePartyChange() {
@@ -850,6 +869,14 @@
             if (!select) return;
             setActiveParty(select.value);
             updatePartyDropdown();
+            handleInputChange();
+        }
+
+        function handlePartyRateChange() {
+            const select = document.getElementById('partyRateSelect');
+            if (!select) return;
+            const active = getActiveParty();
+            localStorage.setItem('tsc_rate_' + active, select.value);
             handleInputChange();
         }
 
@@ -941,6 +968,7 @@
         window.updatePartyDropdown = updatePartyDropdown;
         window.handlePartyChange = handlePartyChange;
         window.handleGlobalPartyChange = handleGlobalPartyChange;
+        window.handlePartyRateChange = handlePartyRateChange;
         window.openCreateUserModal = openCreateUserModal;
         window.closeCreateUserModal = closeCreateUserModal;
         window.submitCreateUser = submitCreateUser;
@@ -1095,7 +1123,7 @@
             return dateStr;
         }
 
-        function parseRowMessage(rawRow, inheritedCategory = null, time = null) {
+        function parseRowMessage(rawRow, inheritedCategory = null, time = null, remainingLines = []) {
             const entries = [];
             if (!rawRow.trim()) return entries;
             
@@ -1125,40 +1153,30 @@
             
             if (!processedRow) return entries;
             
-            // Determine category based on time window
-            let finalCategory = getCategoryByTime(resolvedTime);
+            let finalCategory = null;
             let categoryFoundAlias = '';
             
-            // If time is not present or not mapped, fallback to written category alias or inherited
+            // First priority: search if there is an explicit category alias in text
+            let categorySearchable = processedRow.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
+            for (const key in CATEGORIES_MAP) {
+                for (const alias of CATEGORIES_MAP[key]) {
+                    if (categorySearchable.includes(alias.replace(/\./g, ''))) {
+                        finalCategory = key;
+                        categoryFoundAlias = alias;
+                        break;
+                    }
+                }
+                if (finalCategory) break;
+            }
+            
+            // Second priority: check category based on time window
             if (!finalCategory) {
-                let categorySearchable = processedRow.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
-                for (const key in CATEGORIES_MAP) {
-                    for (const alias of CATEGORIES_MAP[key]) {
-                        if (categorySearchable.includes(alias.replace(/\./g, ''))) {
-                            finalCategory = key;
-                            categoryFoundAlias = alias;
-                            break;
-                        }
-                    }
-                    if (finalCategory) break;
-                }
-                
-                // Inherit category if not found in this row
-                if (!finalCategory) {
-                    finalCategory = inheritedCategory;
-                }
-            } else {
-                // If category is determined by time, still search if there is a category alias in text to remove it
-                let categorySearchable = processedRow.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
-                for (const key in CATEGORIES_MAP) {
-                    for (const alias of CATEGORIES_MAP[key]) {
-                        if (categorySearchable.includes(alias.replace(/\./g, ''))) {
-                            categoryFoundAlias = alias;
-                            break;
-                        }
-                    }
-                    if (categoryFoundAlias) break;
-                }
+                finalCategory = getCategoryByTime(resolvedTime);
+            }
+            
+            // Fallback: inherit category if not found in this row
+            if (!finalCategory) {
+                finalCategory = inheritedCategory;
             }
             
             if (!finalCategory) return entries; 
@@ -1182,7 +1200,16 @@
                 if (bracketPart && bracketPart.startsWith('(') && bracketPart.endsWith(')')) {
                     bracketValue = parseInt(bracketPart.slice(1, -1), 10) || 1;
                     i++; 
-                } 
+                } else {
+                    // Look ahead in remaining lines for the next bracket
+                    for (const nextLine of remainingLines) {
+                        const match = nextLine.match(/\((\d+)\)/);
+                        if (match) {
+                            bracketValue = parseInt(match[1], 10) || 1;
+                            break;
+                        }
+                    }
+                }
                 
                 if (numbersArea) {
                     let allNumbersInArea = []; 
@@ -1233,11 +1260,17 @@
             const rawRows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
             let currentActiveDate = defaultDate;
             
-            for (const rawRow of rawRows) {
+            for (let idx = 0; idx < rawRows.length; idx++) {
+                const rawRow = rawRows[idx];
                 const parsed = extractDateAndContent(rawRow, currentActiveDate);
                 currentActiveDate = parsed.date;
                 
-                const entries = parseRowMessage(parsed.content, null, parsed.time);
+                const remaining = rawRows.slice(idx + 1).map(r => {
+                    const p = extractDateAndContent(r, currentActiveDate);
+                    return p.content;
+                });
+                
+                const entries = parseRowMessage(parsed.content, null, parsed.time, remaining);
                 if (!parsedFinds[currentActiveDate]) {
                     parsedFinds[currentActiveDate] = { fb: '', nfb: '', gb: '', nd: '', pd: '' };
                 }
@@ -1271,11 +1304,16 @@
             const findValues = findValuesByDate[dateKey] || {};
             
             let currentCategory = null;
-            for (const rowObj of rows) {
+            for (let idx = 0; idx < rows.length; idx++) {
+                const rowObj = rows[idx];
                 const content = typeof rowObj === 'string' ? rowObj : rowObj.content;
                 const time = typeof rowObj === 'string' ? null : rowObj.time;
                 
-                const parsedEntries = parseRowMessage(content, currentCategory, time);
+                const remaining = rows.slice(idx + 1).map(r => {
+                    return typeof r === 'string' ? r : r.content;
+                });
+                
+                const parsedEntries = parseRowMessage(content, currentCategory, time, remaining);
                 if (parsedEntries.length > 0) {
                     currentCategory = parsedEntries[parsedEntries.length - 1].category;
                 }
@@ -1324,10 +1362,17 @@
                 }
             }
             
+            const activeParty = getActiveParty();
+            const rateStr = localStorage.getItem('tsc_rate_' + activeParty) || '90/10';
+            const [payoutVal, commVal] = rateStr.split('/').map(Number);
+            const jodiMultiplier = payoutVal;
+            const harufMultiplier = payoutVal / 10;
+            const commPercent = commVal / 100;
+            
             for (const key of CATEGORY_KEYS) {
                 const res = results[key];
-                res.debit = (res.oDara * 90) + (res.oAkhar * 9);
-                res.credit = res.tSale - Math.round(res.tSale * 0.1);
+                res.debit = (res.oDara * jodiMultiplier) + (res.oAkhar * harufMultiplier);
+                res.credit = res.tSale - Math.round(res.tSale * commPercent);
                 res.comm = res.debit - res.credit;
             }
             
@@ -1348,6 +1393,10 @@
             if (shareBar) shareBar.classList.remove('hidden');
             
             const activeParty = getActiveParty();
+            const rateStr = localStorage.getItem('tsc_rate_' + activeParty) || '90/10';
+            const [payoutVal, commVal] = rateStr.split('/').map(Number);
+            const rateLabel = `${rateStr}-${(payoutVal/10).toFixed(1).replace(/\.0$/, '')}/10`;
+            
             let html = '';
             for (const dateKey of dates) {
                 if (!findValuesByDate[dateKey]) {
@@ -1397,7 +1446,7 @@
                             <tr style="background-color: #ffffff !important; color: #000000 !important; font-family: monospace; font-size: 10px;">
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 40px;">${idx + 1}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 6px; text-align: center; font-family: sans-serif; font-weight: bold; width: 140px;">${catLabel}${winningNum}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif; width: 90px;">90/10-9/10</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif; width: 90px;">${rateLabel}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold; width: 90px;">${res.tSale}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oDara}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oAkhar}</td>
@@ -1411,7 +1460,7 @@
                             <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-mono text-xs">
                                 <td class="px-1.5 py-2 text-center">${idx + 1}</td>
                                 <td class="px-2 py-2 text-center font-sans font-bold text-indigo-650 dark:text-indigo-400">${catLabel}${winningNum}</td>
-                                <td class="px-1.5 py-2 text-center font-sans">90/10-9/10</td>
+                                <td class="px-1.5 py-2 text-center font-sans">${rateLabel}</td>
                                 <td class="px-1.5 py-2 text-center font-bold text-slate-700 dark:text-white">₹${res.tSale.toLocaleString()}</td>
                                 <td class="px-1 py-2 text-center">${res.oDara}</td>
                                 <td class="px-1 py-2 text-center">${res.oAkhar}</td>
