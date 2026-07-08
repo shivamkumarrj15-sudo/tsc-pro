@@ -1174,6 +1174,23 @@
                 finalCategory = getCategoryByTime(resolvedTime);
             }
             
+            // Third priority: look ahead in remaining lines for the next category alias
+            if (!finalCategory) {
+                for (const nextLine of remainingLines) {
+                    let nextSearchable = nextLine.toLowerCase().replace(/[\s\.\*#:,-@"]/g, '');
+                    for (const key in CATEGORIES_MAP) {
+                        for (const alias of CATEGORIES_MAP[key]) {
+                            if (nextSearchable.includes(alias.replace(/\./g, ''))) {
+                                finalCategory = key;
+                                break;
+                            }
+                        }
+                        if (finalCategory) break;
+                    }
+                    if (finalCategory) break;
+                }
+            }
+            
             // Fallback: inherit category if not found in this row
             if (!finalCategory) {
                 finalCategory = inheritedCategory;
