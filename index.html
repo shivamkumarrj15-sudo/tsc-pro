@@ -1112,13 +1112,15 @@
             }
         }
 
-        function extractDateAndContent(line, defaultDate) {
+        function extractDateAndContent(line, defaultDate, isMMDD = false) {
             // Bracket format: e.g. [12/06, 20:55] Papa ji: ...
             // Note: Made opening bracket optional to support copies missing the first '['
             const bracketMatch = line.match(/^\[?(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?[,\s]+([^\]]+)\]\s*(.*?):\s*(.*)$/);
             if (bracketMatch) {
-                const day = bracketMatch[1];
-                const month = bracketMatch[2];
+                const num1 = bracketMatch[1];
+                const num2 = bracketMatch[2];
+                const day = isMMDD ? num2 : num1;
+                const month = isMMDD ? num1 : num2;
                 const year = bracketMatch[3] || 2026;
                 const timeRaw = bracketMatch[4];
                 const content = bracketMatch[6];
@@ -1132,8 +1134,10 @@
             // Plain format: e.g. 12/06/2026, 20:55 - Papa ji: ...
             const plainMatch = line.match(/^(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?[,\s]+([^\s-]+(?:\s*[aApP][mM])?)\s*-\s*[^:]+:\s*(.*)$/);
             if (plainMatch) {
-                const day = plainMatch[1];
-                const month = plainMatch[2];
+                const num1 = plainMatch[1];
+                const num2 = plainMatch[2];
+                const day = isMMDD ? num2 : num1;
+                const month = isMMDD ? num1 : num2;
                 const year = plainMatch[3] || 2026;
                 const timeStr = plainMatch[4];
                 const content = plainMatch[5];
@@ -1143,8 +1147,10 @@
             // Fallback match for lines that just start with a date
             const simpleMatch = line.match(/^(?:\[)?(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-](\d{2,4}))?\b/);
             if (simpleMatch) {
-                const day = simpleMatch[1];
-                const month = simpleMatch[2];
+                const num1 = simpleMatch[1];
+                const num2 = simpleMatch[2];
+                const day = isMMDD ? num2 : num1;
+                const month = isMMDD ? num1 : num2;
                 const year = simpleMatch[3] || 2026;
                 
                 let content = line;
@@ -1162,6 +1168,46 @@
             }
             
             return { date: defaultDate, content: line, time: null };
+        }
+
+        function detectIsMMDD(rawRows, defaultDate) {
+            const pairs = [];
+            for (const row of rawRows) {
+                const match = row.match(/^(?:\[)?(\d{1,2})[\/\.-](\d{1,2})/);
+                if (match) {
+                    pairs.push([parseInt(match[1], 10), parseInt(match[2], 10)]);
+                }
+            }
+            if (pairs.length === 0) return false;
+            
+            const unique1 = new Set(pairs.map(p => p[0]));
+            const unique2 = new Set(pairs.map(p => p[1]));
+            
+            if (unique1.size < unique2.size) {
+                return true; 
+            } else if (unique2.size < unique1.size) {
+                return false; 
+            }
+            
+            let activeMonth = 7; 
+            if (defaultDate) {
+                const parts = defaultDate.split('-');
+                if (parts.length === 3) {
+                    activeMonth = parseInt(parts[1], 10);
+                }
+            }
+            
+            const firstPair = pairs[0];
+            const val1 = firstPair[0];
+            const val2 = firstPair[1];
+            
+            if (val1 === activeMonth && val2 !== activeMonth) {
+                return true;
+            } else if (val2 === activeMonth && val1 !== activeMonth) {
+                return false;
+            }
+            
+            return false; 
         }
 
         function formatDateDisplay(dateStr) {
@@ -1324,15 +1370,16 @@
             if (!text.trim()) return parsedFinds;
             
             const rawRows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
+            const isMMDD = detectIsMMDD(rawRows, defaultDate);
             let currentActiveDate = defaultDate;
             
             for (let idx = 0; idx < rawRows.length; idx++) {
                 const rawRow = rawRows[idx];
-                const parsed = extractDateAndContent(rawRow, currentActiveDate);
+                const parsed = extractDateAndContent(rawRow, currentActiveDate, isMMDD);
                 currentActiveDate = parsed.date;
                 
                 const remaining = rawRows.slice(idx + 1).map(r => {
-                    const p = extractDateAndContent(r, currentActiveDate);
+                    const p = extractDateAndContent(r, currentActiveDate, isMMDD);
                     return p.content;
                 });
                 
@@ -1834,10 +1881,11 @@
             // 2. Group bet messages by date
             const grouped = {};
             const rawRows = rowMessages.split('\n').map(r => r.trim()).filter(r => r.length > 0);
+            const isMMDD = detectIsMMDD(rawRows, defaultDate);
             let currentActiveDate = defaultDate;
             
             for (const rawRow of rawRows) {
-                const parsed = extractDateAndContent(rawRow, currentActiveDate);
+                const parsed = extractDateAndContent(rawRow, currentActiveDate, isMMDD);
                 currentActiveDate = parsed.date;
                 if (!grouped[currentActiveDate]) {
                     grouped[currentActiveDate] = [];
@@ -2218,10 +2266,11 @@
             
             const groupedLines = {};
             const rawRows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
+            const isMMDD = detectIsMMDD(rawRows, defaultDate);
             let currentActiveDate = defaultDate;
             
             for (const rawRow of rawRows) {
-                const parsed = extractDateAndContent(rawRow, currentActiveDate);
+                const parsed = extractDateAndContent(rawRow, currentActiveDate, isMMDD);
                 currentActiveDate = parsed.date;
                 if (!groupedLines[currentActiveDate]) {
                     groupedLines[currentActiveDate] = [];
