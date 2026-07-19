@@ -260,9 +260,20 @@
           <label class="block text-xs font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">कन्फर्मेशन PIN (Confirmation PIN)</label>
           <input type="password" id="userConfirmPin" class="w-full text-center text-xl tracking-widest bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg py-2 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors text-slate-900 dark:text-white" maxlength="6" placeholder="****">
         </div>
-        <div id="userNameSection" class="hidden">
-          <label class="block text-xs font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">यूज़र का नाम / आईडी (User Name / ID)</label>
-          <input type="text" id="newUserNameInput" class="w-full text-center text-lg bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg py-2 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors uppercase text-slate-900 dark:text-white" placeholder="e.g. SAGAR">
+        <div id="userNameSection" class="hidden space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">यूज़र का नाम / आईडी (User Name / ID)</label>
+            <input type="text" id="newUserNameInput" class="w-full text-center text-lg bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg py-2 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors uppercase text-slate-900 dark:text-white" placeholder="e.g. SAGAR">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">प्रारंभिक कमीशन दर (Default Rate Split)</label>
+            <select id="newUserRateSelect" class="w-full text-center text-base bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg py-2 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors text-slate-900 dark:text-white">
+              <option value="90/10" selected>90/10</option>
+              <option value="85/15">85/15</option>
+              <option value="80/20">80/20</option>
+              <option value="93/7">93/7</option>
+            </select>
+          </div>
         </div>
         <p id="createUserError" class="text-red-500 text-xs text-center hidden"></p>
         <button id="btnCreateUserSubmit" onclick="submitCreateUser()" class="w-full bg-neon-500 hover:bg-neon-400 text-white dark:text-slate-900 font-bold py-2.5 rounded-lg transition-all shadow-md">सत्यापित करें (Verify PIN)</button>
@@ -951,8 +962,12 @@
                     if (nameField) nameField.focus();
                     return;
                 }
+                const rateField = document.getElementById('newUserRateSelect');
+                const rate = rateField ? rateField.value : '90/10';
+                
                 parties.push(cleanName);
                 saveRegisteredParties(parties);
+                localStorage.setItem('tsc_rate_' + cleanName, rate);
                 setActiveParty(cleanName);
                 updatePartyDropdown();
                 handleInputChange();
@@ -1047,8 +1062,8 @@
             // FB: 06:15 AM to 06:25 PM (375 to 1104 minutes)
             // NFB: 06:25 PM to 07:25 PM (1105 to 1164 minutes)
             // GB: 07:25 PM to 10:00 PM (1165 to 1319 minutes)
-            // ND: 10:00 PM to 12:00 AM (1320 to 1439 minutes)
-            // PD: 12:00 AM to 06:14 AM (0 to 374 minutes)
+            // ND: 10:00 PM to 11:30 PM (1320 to 1409 minutes)
+            // PD: 11:30 PM to 06:14 AM (1410 to 1439, and 0 to 374 minutes)
             
             if (totalMinutes >= 375 && totalMinutes < 1105) {
                 return 'fb';
@@ -1056,7 +1071,7 @@
                 return 'nfb';
             } else if (totalMinutes >= 1165 && totalMinutes < 1320) {
                 return 'gb';
-            } else if (totalMinutes >= 1320 && totalMinutes < 1440) {
+            } else if (totalMinutes >= 1320 && totalMinutes < 1410) {
                 return 'nd';
             } else {
                 return 'pd';
