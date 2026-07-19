@@ -263,11 +263,12 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">प्रारंभिक कमीशन दर (Default Rate Split)</label>
-            <select id="newUserRateSelect" class="w-full text-center text-base bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg py-2 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors text-slate-900 dark:text-white">
+            <select id="newUserRateSelect" onchange="handleNewUserRateChange()" class="w-full text-center text-base bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg py-2 focus:outline-none focus:border-neon-500 dark:focus:border-neon-400 transition-colors text-slate-900 dark:text-white">
               <option value="90/10" selected>90/10</option>
               <option value="85/15">85/15</option>
               <option value="80/20">80/20</option>
               <option value="93/7">93/7</option>
+              <option value="custom">कस्टम... (Custom...)</option>
             </select>
           </div>
         </div>
@@ -457,6 +458,7 @@
           <option value="85/15">85/15</option>
           <option value="80/20">80/20</option>
           <option value="93/7">93/7</option>
+          <option value="custom">कस्टम... (Custom...)</option>
          </select>
         </div>
        </div>
@@ -846,6 +848,28 @@
             localStorage.setItem('tsc_active_party', party);
         }
 
+        function ensureRateSelectHasOption(selectEl, rateVal) {
+            if (!selectEl) return;
+            let exists = false;
+            for (let i = 0; i < selectEl.options.length; i++) {
+                if (selectEl.options[i].value === rateVal) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists && rateVal !== 'custom') {
+                const newOpt = document.createElement('option');
+                newOpt.value = rateVal;
+                newOpt.text = rateVal;
+                const customOpt = Array.from(selectEl.options).find(o => o.value === 'custom');
+                if (customOpt) {
+                    selectEl.insertBefore(newOpt, customOpt);
+                } else {
+                    selectEl.appendChild(newOpt);
+                }
+            }
+        }
+
         function updatePartyDropdown() {
             const select1 = document.getElementById('partySelect');
             const select2 = document.getElementById('globalPartySelect');
@@ -859,6 +883,7 @@
             const rateSelect = document.getElementById('partyRateSelect');
             if (rateSelect) {
                 const currentRate = localStorage.getItem('tsc_rate_' + active) || '90/10';
+                ensureRateSelectHasOption(rateSelect, currentRate);
                 rateSelect.value = currentRate;
             }
         }
@@ -883,8 +908,47 @@
             const select = document.getElementById('partyRateSelect');
             if (!select) return;
             const active = getActiveParty();
-            localStorage.setItem('tsc_rate_' + active, select.value);
-            handleInputChange();
+            
+            if (select.value === 'custom') {
+                const customVal = prompt("कस्टम कमीशन दर दर्ज करें (जैसे: 88/12) / Enter Custom Rate Split (e.g. 88/12):");
+                if (customVal) {
+                    const match = customVal.trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+                    if (match) {
+                        const rateStr = match[1] + '/' + match[2];
+                        ensureRateSelectHasOption(select, rateStr);
+                        select.value = rateStr;
+                        localStorage.setItem('tsc_rate_' + active, rateStr);
+                        handleInputChange();
+                        return;
+                    }
+                }
+                alert("अमान्य फॉर्मेट! कृपया X/Y जैसे 88/12 फॉर्मेट में दर्ज करें।");
+                const prev = localStorage.getItem('tsc_rate_' + active) || '90/10';
+                ensureRateSelectHasOption(select, prev);
+                select.value = prev;
+            } else {
+                localStorage.setItem('tsc_rate_' + active, select.value);
+                handleInputChange();
+            }
+        }
+
+        function handleNewUserRateChange() {
+            const select = document.getElementById('newUserRateSelect');
+            if (!select) return;
+            if (select.value === 'custom') {
+                const customVal = prompt("कस्टम कमीशन दर दर्ज करें (जैसे: 88/12) / Enter Custom Rate Split (e.g. 88/12):");
+                if (customVal) {
+                    const match = customVal.trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+                    if (match) {
+                        const rateStr = match[1] + '/' + match[2];
+                        ensureRateSelectHasOption(select, rateStr);
+                        select.value = rateStr;
+                        return;
+                    }
+                }
+                alert("अमान्य फॉर्मेट! कृपया X/Y जैसे 88/12 फॉर्मेट में दर्ज करें।");
+                select.value = "90/10";
+            }
         }
 
         function openCreateUserModal() {
@@ -951,6 +1015,7 @@
         window.handlePartyChange = handlePartyChange;
         window.handleGlobalPartyChange = handleGlobalPartyChange;
         window.handlePartyRateChange = handlePartyRateChange;
+        window.handleNewUserRateChange = handleNewUserRateChange;
         window.openCreateUserModal = openCreateUserModal;
         window.closeCreateUserModal = closeCreateUserModal;
         window.submitCreateUser = submitCreateUser;
@@ -983,9 +1048,9 @@
             
             if (timeStr) {
                 const cleanedTime = timeStr.trim().toLowerCase();
-                const pm = cleanedTime.includes('pm');
-                const am = cleanedTime.includes('am');
-                const timeParts = cleanedTime.replace(/[^\d:]/g, '').split(':');
+                const pm = cleanedTime.includes('pm') || cleanedTime.includes('p.m.') || cleanedTime.includes('अपराह्न') || cleanedTime.includes('अपराहन') || cleanedTime.includes('रात') || cleanedTime.includes('शाम');
+                const am = cleanedTime.includes('am') || cleanedTime.includes('a.m.') || cleanedTime.includes('पूर्वाह्न') || cleanedTime.includes('पूर्वाहन') || cleanedTime.includes('सुबह');
+                const timeParts = cleanedTime.replace(/[^\d:\.]/g, '').split(/[:\.]/);
                 if (timeParts.length >= 2) {
                     hours = parseInt(timeParts[0], 10);
                     minutes = parseInt(timeParts[1], 10);
@@ -999,9 +1064,9 @@
             }
             
             let dateObj = new Date(y, m, d, hours, minutes);
-            // If the time is before 06:15 AM, shift the date to the previous day
+            // If the time is before 06:00 AM, shift the date to the previous day
             const totalMins = hours * 60 + minutes;
-            if (totalMins < 375) {
+            if (totalMins < 360) {
                 dateObj.setDate(dateObj.getDate() - 1);
             }
             
@@ -1013,26 +1078,28 @@
 
         function getCategoryByTime(timeStr) {
             if (!timeStr) return null;
-            const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*([aApP][mM])?/);
+            const timeMatch = timeStr.match(/(\d{1,2})[:\.](\d{2})[\s\u202F\u00A0]*([aApP][mM]|पूर्वाह्न|अपराह्न|पूर्वाहन|अपराहन)?/);
             if (!timeMatch) return null;
             
             let hours = parseInt(timeMatch[1], 10);
             const minutes = parseInt(timeMatch[2], 10);
-            const ampm = timeMatch[3];
-            if (ampm) {
-                if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
-                if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
-            }
+            const ampm = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+            
+            const isPM = ampm.includes('pm') || ampm.includes('अपराह्न') || ampm.includes('अपराहन');
+            const isAM = ampm.includes('am') || ampm.includes('पूर्वाह्न') || ampm.includes('पूर्वाहन');
+            
+            if (isPM && hours < 12) hours += 12;
+            if (isAM && hours === 12) hours = 0;
             
             const totalMinutes = hours * 60 + minutes;
             
-            // FB: 06:15 AM to 06:25 PM (375 to 1104 minutes)
+            // FB: 06:00 AM to 06:25 PM (360 to 1104 minutes)
             // NFB: 06:25 PM to 07:25 PM (1105 to 1164 minutes)
             // GB: 07:25 PM to 10:00 PM (1165 to 1319 minutes)
             // ND: 10:00 PM to 11:30 PM (1320 to 1409 minutes)
-            // PD: 11:30 PM to 06:14 AM (1410 to 1439, and 0 to 374 minutes)
+            // PD: 11:30 PM to 06:00 AM (1410 to 1439, and 0 to 359 minutes)
             
-            if (totalMinutes >= 375 && totalMinutes < 1105) {
+            if (totalMinutes >= 360 && totalMinutes < 1105) {
                 return 'fb';
             } else if (totalMinutes >= 1105 && totalMinutes < 1165) {
                 return 'nfb';
@@ -1056,7 +1123,7 @@
                 const timeRaw = bracketMatch[4];
                 const content = bracketMatch[6];
                 
-                const timeMatch = timeRaw.match(/(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/);
+                const timeMatch = timeRaw.match(/(\d{1,2}[:\.]\d{2}(?:[\s\u202F\u00A0]*([aApP][mM]|पूर्वाह्न|अपराह्न|पूर्वाहन|अपराहन))?)/);
                 const timeStr = timeMatch ? timeMatch[1] : null;
                 
                 return { date: adjustDateByTime(year, month, day, timeStr), content: content, time: timeStr };
@@ -1088,7 +1155,7 @@
                     content = line.replace(/^[^:]*:\s*/, '');
                 }
                 
-                const timeInLineMatch = line.match(/\b(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)\b/);
+                const timeInLineMatch = line.match(/(\d{1,2}[:\.]\d{2}(?:[\s\u202F\u00A0]*([aApP][mM]|पूर्वाह्न|अपराह्न|पूर्वाहन|अपराहन))?)/);
                 const timeStr = timeInLineMatch ? timeInLineMatch[1] : null;
                 
                 return { date: adjustDateByTime(year, month, day, timeStr), content: content, time: timeStr };
@@ -1118,7 +1185,7 @@
             
             if (bracketMatch) {
                 const timeRaw = bracketMatch[4];
-                const timeMatch = timeRaw.match(/(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/);
+                const timeMatch = timeRaw.match(/(\d{1,2}[:\.]\d{2}(?:[\s\u202F\u00A0]*([aApP][mM]|पूर्वाह्न|अपराह्न|पूर्वाहन|अपराहन))?)/);
                 if (timeMatch && !resolvedTime) {
                     resolvedTime = timeMatch[1];
                 }
