@@ -1064,9 +1064,9 @@
             }
             
             let dateObj = new Date(y, m, d, hours, minutes);
-            // If the time is before 06:00 AM, shift the date to the previous day
+            // If the time is 06:00 AM or before, shift the date to the previous day
             const totalMins = hours * 60 + minutes;
-            if (totalMins < 360) {
+            if (totalMins <= 360) {
                 dateObj.setDate(dateObj.getDate() - 1);
             }
             
@@ -1093,13 +1093,13 @@
             
             const totalMinutes = hours * 60 + minutes;
             
-            // FB: 06:00 AM to 06:25 PM (360 to 1104 minutes)
+            // FB: After 06:00 AM to 06:25 PM (361 to 1104 minutes)
             // NFB: 06:25 PM to 07:25 PM (1105 to 1164 minutes)
             // GB: 07:25 PM to 10:00 PM (1165 to 1319 minutes)
             // ND: 10:00 PM to 11:30 PM (1320 to 1409 minutes)
-            // PD: 11:30 PM to 06:00 AM (1410 to 1439, and 0 to 359 minutes)
+            // PD: 11:30 PM to 06:00 AM inclusive (1410 to 1439, and 0 to 360 minutes)
             
-            if (totalMinutes >= 360 && totalMinutes < 1105) {
+            if (totalMinutes > 360 && totalMinutes < 1105) {
                 return 'fb';
             } else if (totalMinutes >= 1105 && totalMinutes < 1165) {
                 return 'nfb';
