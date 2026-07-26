@@ -1338,13 +1338,15 @@
                     }
                     
                     let numbersAreaStripped = numbersArea.replace(rangeRegex, ' ');
-                    const singleNumbers = numbersAreaStripped.match(/\b\d{2,3}\b/g) || [];
+                    const singleNumbers = numbersAreaStripped.match(/\b\d{1,3}\b/g) || [];
                     for (const n of singleNumbers) {
+                        const numVal = parseInt(n, 10);
                         if (n.length === 2) {
-                            const numVal = parseInt(n, 10);
                             if (numVal >= 0 && numVal <= 99) {
                                 allNumbersInArea.push(String(numVal).padStart(2, '0'));
                             }
+                        } else if (n === '100' || numVal === 100) {
+                            allNumbersInArea.push('100');
                         } else if (n.length === 3 && TRIPLE_NUMBERS.includes(n)) {
                             allNumbersInArea.push(n);
                         }
@@ -1390,9 +1392,9 @@
                 
                 for (const entry of entries) {
                     const cat = entry.category;
-                    const winNum = entry.numbers.find(n => n.length === 2);
+                    const winNum = entry.numbers.find(n => n.length === 2 || n === '100');
                     if (winNum) {
-                        parsedFinds[currentActiveDate][cat] = winNum;
+                        parsedFinds[currentActiveDate][cat] = winNum === '100' ? '00' : winNum;
                     }
                 }
             }
@@ -1443,19 +1445,21 @@
                     let winningAkharCount = 0;
                     
                     for (const num of entry.numbers) {
-                        if (num.length === 2) {
+                        if (num.length === 2 || num === '100') {
                             jodiCount++;
                             if (findStr) {
-                                if (num === findStr) {
+                                const normNum = num === '100' ? '00' : num;
+                                const normFindStr = findStr === '100' ? '00' : findStr;
+                                if (normNum === normFindStr) {
                                     winningJodiCount++;
                                 } else if (isDouble) {
-                                    const reversedNum = num[1] + num[0];
-                                    if (reversedNum === findStr) {
+                                    const reversedNum = normNum[1] + normNum[0];
+                                    if (reversedNum === normFindStr) {
                                         winningJodiCount++;
                                     }
                                 }
                             }
-                        } else if (num.length === 3 && TRIPLE_NUMBERS.includes(num)) {
+                        } else if (num.length === 3 && num !== '100' && TRIPLE_NUMBERS.includes(num)) {
                             akharCount++;
                             if (findStr && findStr.length === 2) {
                                 const findLastDigit = parseInt(findStr[1], 10);
