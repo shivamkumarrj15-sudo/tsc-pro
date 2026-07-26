@@ -1748,6 +1748,10 @@
             const exportTbody = document.getElementById(`export-tbody-${dateKey}`);
             if (!receiptItems || !receiptSummary || !exportTbody) return;
             
+            const activeParty = getActiveParty();
+            const rateStr = localStorage.getItem('tsc_rate_' + activeParty) || '90/10';
+            const rateLabel = `${rateStr}-9/10`;
+            
             const results = calculatePassingForDate(groupedRows[dateKey], dateKey);
             const findVals = findValuesByDate[dateKey];
             const activeCats = CATEGORY_KEYS.filter(cat => results[cat].tSale > 0);
@@ -1791,7 +1795,7 @@
                             <tr style="background-color: #ffffff !important; color: #000000 !important; font-family: monospace; font-size: 10px;">
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 40px;">${idx + 1}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 6px; text-align: center; font-family: sans-serif; font-weight: bold; width: 140px;">${catLabel}${winningNum}</td>
-                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif; width: 90px;">90/10-9/10</td>
+                                <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-family: sans-serif; width: 90px;">${rateLabel}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; font-weight: bold; width: 90px;">${res.tSale}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oDara}</td>
                                 <td style="border: 1px solid #cbd5e1 !important; padding: 5px 4px; text-align: center; width: 90px;">${res.oAkhar}</td>
@@ -1805,7 +1809,7 @@
                         <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-mono text-xs">
                             <td class="px-1.5 py-2 text-center">${idx + 1}</td>
                             <td class="px-2 py-2 text-center font-sans font-bold text-indigo-650 dark:text-indigo-400">${catLabel}${winningNum}</td>
-                            <td class="px-1.5 py-2 text-center font-sans">90/10-9/10</td>
+                            <td class="px-1.5 py-2 text-center font-sans">${rateLabel}</td>
                             <td class="px-1.5 py-2 text-center font-bold text-slate-700 dark:text-white">₹${res.tSale.toLocaleString()}</td>
                             <td class="px-1 py-2 text-center">${res.oDara}</td>
                             <td class="px-1 py-2 text-center">${res.oAkhar}</td>
