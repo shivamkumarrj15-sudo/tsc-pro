@@ -1478,9 +1478,9 @@
             const activeParty = getActiveParty();
             const rateStr = localStorage.getItem('tsc_rate_' + activeParty) || '90/10';
             const [payoutVal, commVal] = rateStr.split('/').map(Number);
-            const jodiMultiplier = payoutVal;
-            const harufMultiplier = payoutVal / 10;
-            const commPercent = commVal / 100;
+            const jodiMultiplier = 90;
+            const harufMultiplier = 9;
+            const commPercent = (isNaN(commVal) ? 10 : commVal) / 100;
             
             for (const key of CATEGORY_KEYS) {
                 const res = results[key];
@@ -1507,8 +1507,7 @@
             
             const activeParty = getActiveParty();
             const rateStr = localStorage.getItem('tsc_rate_' + activeParty) || '90/10';
-            const [payoutVal, commVal] = rateStr.split('/').map(Number);
-            const rateLabel = `${rateStr}-${(payoutVal/10).toFixed(1).replace(/\.0$/, '')}/10`;
+            const rateLabel = `${rateStr}-9/10`;
             
             let html = '';
             for (const dateKey of dates) {
