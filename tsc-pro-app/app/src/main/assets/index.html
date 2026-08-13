@@ -1020,10 +1020,97 @@
         window.closeCreateUserModal = closeCreateUserModal;
         window.submitCreateUser = submitCreateUser;
 
+        function getLedgerRecords() {
+            try {
+                return JSON.parse(localStorage.getItem('tsc_ledger_records')) || [];
+            } catch(e) {
+                return [];
+            }
+        }
+
+        function saveLedgerRecords(records) {
+            localStorage.setItem('tsc_ledger_records', JSON.stringify(records));
+        }
+
+        function isRecordSaved(party, dateKey) {
+            const records = getLedgerRecords();
+            return records.some(r => r.party === party && r.date === dateKey);
+        }
+
+        function getPartyPreviousBalance(party, currentDateKey) {
+            const records = getLedgerRecords();
+            let sum = 0;
+            records.forEach(r => {
+                if (r.party === party && r.date < currentDateKey) {
+                    sum += (r.netVal || 0);
+                }
+            });
+            return sum;
+        }
+
+        function getPartyTotalSavedBalance(party) {
+            const records = getLedgerRecords();
+            let sum = 0;
+            records.forEach(r => {
+                if (r.party === party) {
+                    sum += (r.netVal || 0);
+                }
+            });
+            return sum;
+        }
+
+        function savePartyDateRecord(dateKey) {
+            const activeParty = getActiveParty();
+            if (!currentGroupedRows || !currentGroupedRows[dateKey]) {
+                alert("कोई डेटा उपलब्ध नहीं है।");
+                return;
+            }
+            const results = calculatePassingForDate(currentGroupedRows[dateKey], dateKey);
+            let totalTSale = 0, totalDebit = 0, totalComm = 0;
+            
+            for (const cat of CATEGORY_KEYS) {
+                const res = results[cat];
+                totalTSale += res.tSale;
+                totalDebit += res.debit;
+                totalComm += res.credit;
+            }
+            
+            const todayNetBalance = totalComm - totalDebit;
+            const rateStr = localStorage.getItem('tsc_rate_' + activeParty) || '90/10';
+            
+            let records = getLedgerRecords();
+            records = records.filter(r => !(r.party === activeParty && r.date === dateKey));
+            
+            records.push({
+                id: `${activeParty}_${dateKey}_${Date.now()}`,
+                party: activeParty,
+                date: dateKey,
+                tSale: totalTSale,
+                debit: totalDebit,
+                credit: totalComm,
+                netVal: todayNetBalance,
+                rateStr: rateStr,
+                timestamp: Date.now()
+            });
+            
+            saveLedgerRecords(records);
+            renderDateSections(currentGroupedRows);
+            alert(`यूज़र "${activeParty}" के लिए दिनांक ${formatDateToDDMMYYYY(dateKey)} का रिकॉर्ड (बैलेंस: ${formatCurrency(todayNetBalance)}) सफलतापूर्वक सुरक्षित (Save) कर लिया गया है!`);
+        }
+
+        window.getLedgerRecords = getLedgerRecords;
+        window.saveLedgerRecords = saveLedgerRecords;
+        window.isRecordSaved = isRecordSaved;
+        window.getPartyPreviousBalance = getPartyPreviousBalance;
+        window.getPartyTotalSavedBalance = getPartyTotalSavedBalance;
+        window.savePartyDateRecord = savePartyDateRecord;
+
         function formatDateToDDMMYYYY(dateStr) {
             const parts = dateStr.split('-');
             if (parts.length === 3) {
-                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                let y = parseInt(parts[0], 10);
+                if (isNaN(y) || y < 2020 || y > 2030) y = new Date().getFullYear();
+                return `${parts[2]}-${parts[1]}-${y}`;
             }
             return dateStr;
         }
@@ -1038,10 +1125,24 @@
         const findValuesByDate = {};
 
         function adjustDateByTime(year, month, day, timeStr) {
+            let currentYear = new Date().getFullYear();
             let y = parseInt(year, 10);
-            if (y < 100) y += 2000;
+            if (isNaN(y)) {
+                y = currentYear;
+            } else if (y < 100) {
+                if (y >= 20 && y <= 30) {
+                    y += 2000;
+                } else {
+                    y = currentYear;
+                }
+            } else if (y < 2020 || y > 2030) {
+                y = currentYear;
+            }
+            
             let m = parseInt(month, 10) - 1; // Date month is 0-indexed
+            if (isNaN(m) || m < 0 || m > 11) m = new Date().getMonth();
             let d = parseInt(day, 10);
+            if (isNaN(d) || d < 1 || d > 31) d = new Date().getDate();
             
             let hours = 12;
             let minutes = 0;
@@ -1599,6 +1700,10 @@
                         </tr>
                     `;
                     
+                    const prevBalance = getPartyPreviousBalance(activeParty, dateKey);
+                    const runningTotal = prevBalance + totalNetBalance;
+                    const isSaved = isRecordSaved(activeParty, dateKey);
+
                     exportTableRowsHtml += `
                         <tr style="background-color: #f1f5f9 !important; color: #000000 !important; font-family: monospace; font-size: 10px; font-weight: bold;">
                             <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-family: sans-serif; width: 270px;" colspan="3">TOTAL</td>
@@ -1609,8 +1714,16 @@
                             <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; font-weight: bold; width: 100px;">${totalComm}</td>
                             <td style="border: 1px solid #cbd5e1 !important; padding: 6px 4px; text-align: center; color: ${totalNetBalance >= 0 ? '#16a34a' : '#dc2626'} !important; font-weight: bold; width: 110px;">${totalNetBalance}</td>
                         </tr>
+                        <tr style="background-color: #f8fafc !important; color: #000000 !important; font-family: sans-serif; font-size: 10px; font-weight: bold;">
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 8px; text-align: left;" colspan="4">पिछला बकाया (Prev): ${formatCurrency(prevBalance)}</td>
+                            <td style="border: 1px solid #cbd5e1 !important; padding: 6px 8px; text-align: right;" colspan="5">कुल बकाया (Running Total): ${formatCurrency(runningTotal)}</td>
+                        </tr>
                     `;
                 }
+                
+                const prevBalCard = getPartyPreviousBalance(activeParty, dateKey);
+                const runningTotCard = prevBalCard + totalNetBalance;
+                const isSavedCard = isRecordSaved(activeParty, dateKey);
                 
                 html += `
                     <div id="card-${dateKey}" class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 space-y-4 relative">
@@ -1619,6 +1732,10 @@
                                 <i class="fa-solid fa-calendar-day"></i> Date: ${formatDateDisplay(dateKey)}
                             </h3>
                             <div class="card-actions flex items-center gap-2">
+                                <button onclick="savePartyDateRecord('${dateKey}')" title="Save Ledger Record for ${activeParty}" class="px-3 py-1.5 ${isSavedCard ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-bold rounded-lg text-xs transition-all flex items-center gap-1.5 shadow-sm">
+                                    <i class="fa-solid ${isSavedCard ? 'fa-circle-check' : 'fa-floppy-disk'}"></i>
+                                    <span>${isSavedCard ? 'सुरक्षित (Saved)' : 'सेव करें (Save)'}</span>
+                                </button>
                                 <button onclick="shareReportImage('${dateKey}')" title="Share Report Image" class="p-2 bg-green-100 dark:bg-green-950/30 hover:bg-green-200 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 rounded-lg transition-colors flex items-center justify-center w-9 h-9">
                                     <i class="fa-solid fa-share-nodes text-base"></i>
                                 </button>
@@ -1673,6 +1790,18 @@
                                     ${receiptItemsHtml}
                                 </tbody>
                             </table>
+                            <div class="p-3 bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-slate-800 dark:to-indigo-950/40 border-t border-slate-200 dark:border-indigo-900/40 flex flex-wrap justify-between items-center text-xs font-sans gap-2">
+                                <div class="font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide flex items-center gap-1">
+                                    <i class="fa-solid fa-user-tag"></i> यूज़र: ${activeParty}
+                                </div>
+                                <div class="flex items-center gap-4 flex-wrap">
+                                    <div>आज का बैलेंस: <span class="font-bold ${totalNetBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">${formatCurrency(totalNetBalance)}</span></div>
+                                    <div>पिछला बकाया (Prev): <span class="font-bold ${prevBalCard >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">${formatCurrency(prevBalCard)}</span></div>
+                                    <div class="font-extrabold text-sm text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                                        कुल बकाया (Running Total): <span class="${runningTotCard >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">${formatCurrency(runningTotCard)}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div id="receipt-summary-${dateKey}" class="hidden"></div>
  
