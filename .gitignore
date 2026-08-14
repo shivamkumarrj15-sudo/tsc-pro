@@ -4,3 +4,34 @@
 /tsc-pro-app/app/build/
 /tsc-pro-app/local.properties
 /TSC_Pro.apk
+
+# ===== SECURITY: Secrets & Credentials (NEVER commit these) =====
+.env
+.env.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+firebase-adminsdk*.json
+secrets.json
+secrets.yaml
+secrets.yml
+config.secret.*
+*.secret
+private_key*
+# Source maps (do not expose in production builds)
+*.js.map
+*.css.map
+# OS files
+.DS_Store
+Thumbs.db
+# Node.js (if ever added)
+node_modules/
+npm-debug.log
+yarn-error.log
