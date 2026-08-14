@@ -3,11 +3,6 @@
  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://checkout.razorpay.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:;">
-  <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
-  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
   <title>TSC Pro - Secure Standalone</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -218,7 +213,7 @@
  </head>
  <body class="flex flex-col h-screen">
   <!-- ==================== SECURITY: PIN SCREEN ==================== -->
-  <div id="pinScreen" class="fixed inset-0 z-[60] hidden-screen flex items-center justify-center bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
+  <div id="pinScreen" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
     <div class="glass-panel p-8 rounded-2xl max-w-sm w-full text-center border-t border-neon-500/20 dark:border-neon-400/20">
      <div class="mb-6">
       <img src="tsc_pro_logo.png" class="w-20 h-20 mx-auto rounded-2xl shadow-lg border-2 border-neon-500/20 mb-4 animate-pulse-slow" alt="TSC Pro Logo">
@@ -357,7 +352,7 @@
     </div>
   </div>
   <!-- ==================== MAIN APP ==================== -->
-  <div id="mainApp" class="flex overflow-hidden h-screen">
+  <div id="mainApp" class="flex overflow-hidden h-screen hidden-screen">
    <!-- Mobile Overlay -->
    <div id="mobileOverlay" class="fixed inset-0 bg-black/80 z-40 hidden lg:hidden" onclick="toggleSidebar()"></div>
    <!-- Sidebar -->
@@ -2332,11 +2327,6 @@
                 console.log("Firebase Error", e);
             }
 
-            const pinScr = document.getElementById('pinScreen');
-            const mainScr = document.getElementById('mainApp');
-            if (pinScr) pinScr.classList.add('hidden-screen');
-            if (mainScr) mainScr.classList.remove('hidden-screen');
-
             const now = new Date();
             const dateInput = document.getElementById('dateInput');
             if (dateInput) {
@@ -2346,9 +2336,6 @@
                 dateInput.value = `${y}-${m}-${d}`;
             }
             updatePartyDropdown();
-            checkPremiumStatus();
-            runCalculation();
-            handleInputChange();
 
         })();
 
@@ -2915,7 +2902,12 @@
                     `;
                 }
                 if (payButton) payButton.innerText = "Pay via Razorpay (₹499)";
-                if (closeBtn) closeBtn.classList.remove('hidden');
+                
+                if (isPinHidden) {
+                    if (closeBtn) closeBtn.classList.add('hidden');
+                    const modal = document.getElementById('premiumModal');
+                    if (modal) modal.classList.remove('hidden-screen');
+                }
             }
         }
         
